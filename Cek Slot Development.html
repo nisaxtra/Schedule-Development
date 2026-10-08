@@ -1,0 +1,645 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Cek Slot Development</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: papan perencanaan satu kolom. Form cek cepat + vonis di atas, lalu antrian, jadwal (Gantt + kapasitas mingguan), dan data dasar (WIP + parameter). */
+:root{
+  --bg:#EEF1EF; --surface:#FFFFFF; --ink:#15211E; --muted:#58675F; --line:#D1D9D5; --line-soft:#E4E9E6; --soft:#E7ECE9;
+  --accent:#0B6B5B; --accent-ink:#FFFFFF; --wip:#6C7F8B;
+  --ok:#1B7A3E; --ok-bg:#E0F1E5; --hold:#A04D07; --hold-bg:#FBE9CF; --late:#B3261E; --late-bg:#FADCD8;
+  --f-display:'IBM Plex Sans Condensed','Arial Narrow',system-ui,sans-serif;
+  --f-body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1614; --surface:#16211E; --ink:#E5EEEA; --muted:#92A39C; --line:#2B3834; --line-soft:#212D29; --soft:#1C2926;
+    --accent:#4DC2AC; --accent-ink:#06201B; --wip:#8DA1AD;
+    --ok:#62CB88; --ok-bg:#132F20; --hold:#F0A850; --hold-bg:#3A2710; --late:#F38B82; --late-bg:#3B1A17;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1614; --surface:#16211E; --ink:#E5EEEA; --muted:#92A39C; --line:#2B3834; --line-soft:#212D29; --soft:#1C2926;
+  --accent:#4DC2AC; --accent-ink:#06201B; --wip:#8DA1AD;
+  --ok:#62CB88; --ok-bg:#132F20; --hold:#F0A850; --hold-bg:#3A2710; --late:#F38B82; --late-bg:#3B1A17;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--f-body);padding-inline:16px;padding-block:24px 56px;margin:0}
+main{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:32px}
+h1{font:600 clamp(28px,5vw,40px)/1.05 var(--f-display);letter-spacing:-.01em;margin:6px 0 10px;text-wrap:balance}
+h2{font:600 19px/1.2 var(--f-display);letter-spacing:.01em;margin:0 0 4px;text-wrap:balance}
+h3{font:600 14px/1.3 var(--f-display);letter-spacing:.02em;margin:0 0 8px}
+p{margin:0}
+.kicker{font:500 12px var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--accent)}
+.lede{max-width:64ch;color:var(--muted)}
+.sec-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:8px 16px;margin-bottom:12px}
+.sec-head p{color:var(--muted);max-width:62ch}
+.sample{background:var(--hold-bg);color:var(--hold);border:1px solid var(--hold);border-radius:4px;padding:8px 12px;font-size:13px}
+.sample[hidden]{display:none}
+
+label{display:flex;flex-direction:column;gap:4px;font:500 12px var(--f-body);color:var(--muted);min-width:0}
+input,select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:8px 10px;min-width:0;width:100%}
+input:focus-visible,select:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn{font:600 13px var(--f-body);background:var(--accent);color:var(--accent-ink);border:1px solid var(--accent);border-radius:4px;padding:9px 14px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn.ghost:hover{border-color:var(--muted)}
+.btn:disabled{opacity:.5;cursor:default}
+.row-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.hint{font-size:12px;color:var(--muted)}
+
+.hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:16px;align-items:start}
+.qpanel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px}
+.qform{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.qform .wide{grid-column:1/-1}
+
+.verdict{border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:12px;background:var(--surface)}
+.verdict.ok{background:var(--ok-bg);border-color:var(--ok)}
+.verdict.hold{background:var(--hold-bg);border-color:var(--hold)}
+.v-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.v-title{font:600 18px/1.25 var(--f-display);text-wrap:balance;min-width:0}
+.v-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px;margin:0}
+.v-grid dt{font:500 11px var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.v-grid dd{margin:2px 0 0;font:600 15px var(--f-mono);font-variant-numeric:tabular-nums}
+.v-note{font-size:13px}
+.v-note + .v-note{margin-top:-4px}
+
+.chip{display:inline-block;font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:3px;border:1px solid var(--line);background:var(--surface);color:var(--muted);white-space:nowrap}
+.chip.ok{color:var(--ok);border-color:var(--ok);background:var(--ok-bg)}
+.chip.hold{color:var(--hold);border-color:var(--hold);background:var(--hold-bg)}
+.chip.late{color:var(--late);border-color:var(--late);background:var(--late-bg)}
+.verdict .chip{background:var(--surface)}
+.txt-late{color:var(--late)}
+.txt-hold{color:var(--hold)}
+.txt-ok{color:var(--ok)}
+
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:800px}
+th{font:600 11px var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:5px 8px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td input{border-color:transparent;background:transparent;padding:6px}
+td input:hover{border-color:var(--line)}
+td input:focus{background:var(--surface)}
+td.n input{text-align:right;font-family:var(--f-mono)}
+td.d input{min-width:136px}
+td.c input{min-width:170px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.x{background:none;border:0;color:var(--muted);font-size:20px;line-height:1;cursor:pointer;padding:4px 8px;border-radius:4px}
+.x:hover{color:var(--late)}
+.empty{padding:16px;color:var(--muted)}
+.empty[hidden]{display:none}
+
+details.how{margin-top:12px;color:var(--muted);font-size:13px;max-width:70ch}
+details.how summary{cursor:pointer;color:var(--ink);font-weight:500}
+details.how p{margin-top:6px}
+
+.gscroll{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+.g{--lab:150px;--rowh:32px;--px:18px;min-width:calc(var(--lab) + var(--n)*var(--px))}
+.g-head,.g-row{display:flex}
+.g-lab{flex:0 0 var(--lab);position:sticky;left:0;z-index:3;background:var(--surface);padding:0 10px;display:flex;align-items:center;min-width:0;border-right:1px solid var(--line)}
+.g-lab span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.g-track{position:relative;flex:0 0 calc(var(--n)*var(--px));height:var(--rowh)}
+.g-head .g-track{height:28px}
+.g-tick{position:absolute;top:6px;font:500 11px var(--f-mono);color:var(--muted);white-space:nowrap;padding-left:4px}
+.g-body{position:relative;border-top:1px solid var(--line)}
+.g-cols{position:absolute;top:0;bottom:0;left:var(--lab);display:flex;z-index:0}
+.g-cols i{flex:0 0 var(--px);border-left:1px solid var(--line-soft)}
+.g-cols i.nw{background:var(--soft)}
+.g-cols i.t0{border-left:2px solid var(--accent)}
+.g-row{position:relative;z-index:1}
+.g-group{position:relative;z-index:1;display:flex}
+.g-group .g-lab{font:600 11px var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);height:26px;background:var(--soft)}
+.g-group .g-track{height:26px;background:color-mix(in srgb,var(--soft) 55%,transparent)}
+.bar{position:absolute;top:8px;height:16px;border-radius:3px;background:var(--wip)}
+.bar.req{background:var(--accent)}
+.bar.late{background:var(--late)}
+.bar.hold{background:transparent;border:2px dashed var(--hold)}
+.due{position:absolute;top:4px;bottom:4px;width:2px;background:var(--ink);opacity:.85}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{display:inline-block;width:18px;height:10px;border-radius:2px;background:var(--wip)}
+.sw.req{background:var(--accent)}
+.sw.hold{background:transparent;border:2px dashed var(--hold)}
+.sw.due{position:static;width:2px;height:12px;background:var(--ink)}
+
+.wk{display:flex;flex-direction:column;gap:8px;max-width:760px}
+.wk-row{display:grid;grid-template-columns:84px minmax(0,1fr) minmax(120px,auto);gap:12px;align-items:center}
+.wk-lab{font:500 12px var(--f-mono);color:var(--muted)}
+.wk-track{height:12px;background:var(--soft);border-radius:2px;overflow:hidden}
+.wk-fill{height:100%;background:var(--accent)}
+.wk-fill.full{background:var(--hold)}
+.wk-val{font:500 12px var(--f-mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+@media (max-width:520px){.wk-row{grid-template-columns:72px minmax(0,1fr)}.wk-val{grid-column:1/-1;text-align:left}}
+
+.params{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;max-width:760px}
+.hol{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.hol .chip{display:inline-flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0}
+.hol .chip button{background:none;border:0;color:inherit;cursor:pointer;padding:0;font-size:14px;line-height:1}
+.holadd{display:flex;gap:8px;align-items:flex-end;max-width:340px;margin-top:10px}
+.holadd label{flex:1}
+.sub{display:flex;flex-direction:column;gap:12px}
+.cols2{display:flex;flex-direction:column;gap:24px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (prefers-reduced-motion:no-preference){.btn{transition:opacity .15s}}
+</style>
+
+<main>
+  <header>
+    <p class="kicker">Gerbang permintaan sales</p>
+    <h1>Cek Slot Development</h1>
+    <p class="lede">Isi tanggal permintaan masuk, tanggal delivery, dan beban jam pekerjaan. Kalau kapasitas development tidak cukup sampai tanggal delivery, permintaan ditahan otomatis dan kamu langsung tahu tanggal paling cepat yang realistis.</p>
+  </header>
+
+  <p id="sample-note" class="sample" hidden>Angka di halaman ini masih contoh. Ganti WIP, kapasitas, dan antrian dengan data kamu di bagian bawah.</p>
+
+  <section aria-labelledby="h-cek">
+    <div class="sec-head">
+      <div>
+        <h2 id="h-cek">Cek permintaan baru</h2>
+        <p>Dihitung terhadap WIP dan semua permintaan yang sudah diterima di antrian.</p>
+      </div>
+    </div>
+    <div class="hero">
+      <div class="qpanel">
+        <div class="qform">
+          <label class="wide" for="q-code">Kode / style
+            <input id="q-code" type="text" placeholder="Contoh: REQ-0415 Style C" autocomplete="off">
+          </label>
+          <label for="q-masuk">Tanggal masuk
+            <input id="q-masuk" type="date">
+          </label>
+          <label for="q-due">Delivery diminta
+            <input id="q-due" type="date">
+          </label>
+          <label class="wide" for="q-load">Beban development (jam)
+            <input id="q-load" type="number" min="0" step="1" inputmode="decimal" placeholder="Contoh: 20">
+          </label>
+        </div>
+        <div class="row-actions">
+          <button id="q-add" class="btn" type="button">Masukkan ke antrian</button>
+          <span id="q-msg" class="hint" role="status"></span>
+        </div>
+      </div>
+      <div id="verdict" class="verdict" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-req">
+    <div class="sec-head">
+      <div>
+        <h2 id="h-req">Antrian permintaan</h2>
+        <p>Urut tanggal masuk. Permintaan yang tidak muat sampai delivery ditahan dan tidak memakai kapasitas.</p>
+      </div>
+      <button id="add-req" class="btn ghost" type="button">Tambah permintaan</button>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th>Kode / style</th><th>Tgl masuk</th><th>Delivery</th><th style="text-align:right">Beban (jam)</th>
+          <th>Status</th><th>Selesai paling cepat</th><th>Selisih</th><th></th>
+        </tr></thead>
+        <tbody id="req-body"></tbody>
+      </table>
+      <p id="req-empty" class="empty" hidden>Belum ada permintaan. Pakai form di atas lalu pilih Masukkan ke antrian.</p>
+    </div>
+    <details class="how">
+      <summary>Cara hitung</summary>
+      <p>WIP berjalan dijadwalkan dulu berdasarkan due date, mulai hari ini. Permintaan baru diproses urut tanggal masuk. Tiap permintaan mengisi sisa kapasitas harian mulai tanggal masuknya, hanya di hari kerja. Waktu selesai tidak boleh lebih cepat dari lead time minimum. Kalau selesainya melewati tanggal delivery, permintaan ditahan dan tanggal selesainya hanya perkiraan paling cepat.</p>
+    </details>
+  </section>
+
+  <section aria-labelledby="h-jadwal">
+    <div class="sec-head">
+      <div>
+        <h2 id="h-jadwal">Jadwal</h2>
+        <p>Garis hitam menandai delivery yang diminta. Kolom abu-abu adalah hari libur.</p>
+      </div>
+    </div>
+    <div class="gscroll"><div id="gantt"></div></div>
+    <div class="legend">
+      <span><i class="sw"></i>WIP berjalan</span>
+      <span><i class="sw req"></i>Permintaan diterima</span>
+      <span><i class="sw hold"></i>Ditahan (perkiraan paling cepat)</span>
+      <span><i class="sw due"></i>Delivery diminta</span>
+    </div>
+    <div style="margin-top:24px">
+      <h3>Kapasitas 8 minggu ke depan</h3>
+      <div id="weeks" class="wk"></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-dasar">
+    <div class="sec-head">
+      <div>
+        <h2 id="h-dasar">Kondisi development sekarang</h2>
+        <p>Data dasar yang dipakai semua perhitungan. Perubahan tersimpan di browser ini.</p>
+      </div>
+    </div>
+    <div class="cols2">
+      <div class="sub">
+        <h3>Parameter kapasitas</h3>
+        <div class="params">
+          <label for="p-cap">Kapasitas (jam per hari)
+            <input id="p-cap" type="number" min="0" step="1" inputmode="decimal">
+          </label>
+          <label for="p-lt">Lead time minimum (hari kerja)
+            <input id="p-lt" type="number" min="1" step="1" inputmode="numeric">
+          </label>
+          <label for="p-sat">Hari kerja
+            <select id="p-sat">
+              <option value="0">Senin sampai Jumat</option>
+              <option value="1">Senin sampai Sabtu</option>
+            </select>
+          </label>
+        </div>
+        <div class="holadd">
+          <label for="hol-in">Tanggal libur
+            <input id="hol-in" type="date">
+          </label>
+          <button id="hol-add" class="btn ghost" type="button">Tambah</button>
+        </div>
+        <div id="hol" class="hol"></div>
+      </div>
+      <div class="sub">
+        <div class="sec-head" style="margin:0">
+          <h3 style="margin:0">WIP berjalan</h3>
+          <button id="add-wip" class="btn ghost" type="button">Tambah WIP</button>
+        </div>
+        <div class="tw">
+          <table>
+            <thead><tr>
+              <th>Kode / style</th><th>Tgl masuk</th><th>Due date</th><th style="text-align:right">Sisa beban (jam)</th>
+              <th>Status</th><th>Estimasi selesai</th><th>Selisih</th><th></th>
+            </tr></thead>
+            <tbody id="wip-body"></tbody>
+          </table>
+          <p id="wip-empty" class="empty" hidden>Belum ada WIP. Tambahkan pekerjaan yang sedang berjalan beserta sisa bebannya.</p>
+        </div>
+      </div>
+    </div>
+    <div class="row-actions">
+      <button id="reset-sample" class="btn ghost" type="button">Kembalikan data contoh</button>
+      <button id="clear-all" class="btn ghost" type="button">Kosongkan semua</button>
+    </div>
+  </section>
+</main>
+
+<script>
+(function(){
+'use strict';
+var EPS=1e-6, HORIZON=400, KEY='slot-development-v1';
+var DAYS=['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+var MON=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+var S=null, seq=1;
+function nid(){return seq++;}
+function $(s){return document.querySelector(s);}
+function pad(n){return String(n).padStart(2,'0');}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function num(v){var n=parseFloat(v);return isFinite(n)&&n>0?n:0;}
+function fh(n){return String(Math.round(n*10)/10);}
+
+/* tanggal sebagai string YYYY-MM-DD, dihitung di UTC supaya tidak geser zona waktu */
+function parse(s){var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s||'');return m?new Date(Date.UTC(+m[1],+m[2]-1,+m[3])):null;}
+function iso(d){return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate());}
+function addDays(s,n){var d=parse(s);d.setUTCDate(d.getUTCDate()+n);return iso(d);}
+function todayISO(){var n=new Date();return n.getFullYear()+'-'+pad(n.getMonth()+1)+'-'+pad(n.getDate());}
+function fmt(s){var d=parse(s);return d?DAYS[d.getUTCDay()]+' '+d.getUTCDate()+' '+MON[d.getUTCMonth()]:'-';}
+function diffDays(a,b){return Math.round((parse(b)-parse(a))/864e5);}
+
+function isWork(s){
+  var dow=parse(s).getUTCDay();
+  if(dow===0)return false;
+  if(dow===6&&!S.P.sat)return false;
+  return S.P.holidays.indexOf(s)<0;
+}
+function nextWork(s){var g=0;while(!isWork(s)&&g++<800)s=addDays(s,1);return s;}
+function addWork(s,n){s=nextWork(s);for(var i=0;i<n;i++)s=nextWork(addDays(s,1));return s;}
+
+/* isi kapasitas harian yang masih kosong mulai tanggal elig */
+function alloc(used,elig,load,lt){
+  var cap=S.P.cap, d=nextWork(elig), rem=load, parts=[], finish=null, g=0;
+  if(cap<=0)return {finish:null,capFinish:null,start:d,parts:[]};
+  while(rem>EPS&&g++<HORIZON){
+    var free=Math.max(0,cap-(used[d]||0));
+    if(free>EPS){
+      var take=Math.min(free,rem);parts.push([d,take]);rem-=take;
+      if(rem<=EPS){finish=d;break;}
+    }
+    d=nextWork(addDays(d,1));
+  }
+  if(finish===null)return {finish:null,capFinish:null,start:parts.length?parts[0][0]:d,parts:parts};
+  var capFinish=finish;
+  var minF=addWork(nextWork(elig),Math.max(1,lt)-1);
+  if(minF>finish)finish=minF;
+  return {finish:finish,capFinish:capFinish,start:parts.length?parts[0][0]:nextWork(elig),parts:parts};
+}
+function commit(used,parts){parts.forEach(function(p){used[p[0]]=(used[p[0]]||0)+p[1];});}
+function freeUntil(used,from,to){
+  var d=nextWork(from),s=0,g=0;
+  while(d<=to&&g++<HORIZON){s+=Math.max(0,S.P.cap-(used[d]||0));d=nextWork(addDays(d,1));}
+  return s;
+}
+
+function compute(){
+  var today=todayISO(), used={};
+  var out={today:today,used:used,wip:{},req:{},wipOrder:[],reqOrder:[]};
+  var wips=S.wip.map(function(w,i){return {w:w,i:i};}).sort(function(a,b){
+    var x=a.w.due||'9999',y=b.w.due||'9999';return x<y?-1:x>y?1:a.i-b.i;});
+  wips.forEach(function(o){
+    var w=o.w, load=num(w.load);
+    if(!load){out.wip[w.id]={status:'idle'};return;}
+    var r=alloc(used,today,load,1);
+    if(r.parts.length)commit(used,r.parts);
+    var late=!r.finish||(w.due&&r.finish>w.due);
+    var res={status:late?'late':'ok',finish:r.finish,start:r.start,due:w.due};
+    out.wip[w.id]=res;out.wipOrder.push({item:w,res:res});
+  });
+  var reqs=S.req.map(function(q,i){return {q:q,i:i};}).sort(function(a,b){
+    var x=a.q.masuk||today,y=b.q.masuk||today;return x<y?-1:x>y?1:a.i-b.i;});
+  reqs.forEach(function(o){
+    var q=o.q, load=num(q.load);
+    if(!load||!parse(q.due)){out.req[q.id]={status:'idle'};return;}
+    var elig=(q.masuk&&q.masuk>today)?q.masuk:today;
+    var r=alloc(used,elig,load,S.P.lt);
+    var ok=!!r.finish&&r.finish<=q.due;
+    if(ok)commit(used,r.parts);
+    var res={status:ok?'ok':'hold',finish:r.finish,start:r.start,due:q.due};
+    out.req[q.id]=res;out.reqOrder.push({item:q,res:res});
+  });
+  return out;
+}
+
+function gapText(due,fin){
+  if(!parse(due)||!fin)return {t:'-',c:''};
+  var d=diffDays(due,fin);
+  if(d<0)return {t:(-d)+' hari lebih awal',c:'txt-ok'};
+  if(d===0)return {t:'Tepat di delivery',c:'txt-ok'};
+  return {t:'Telat '+d+' hari',c:'txt-hold'};
+}
+
+/* ---------- tabel ---------- */
+function rowHTML(kind,r){
+  var p=kind+'-'+r.id+'-';
+  return '<tr data-id="'+r.id+'">'+
+    '<td class="c"><input id="'+p+'code" class="in" data-k="code" type="text" value="'+esc(r.code)+'" placeholder="Kode / style" aria-label="Kode atau style"></td>'+
+    '<td class="d"><input id="'+p+'masuk" class="in" data-k="masuk" type="date" value="'+esc(r.masuk)+'" aria-label="Tanggal masuk"></td>'+
+    '<td class="d"><input id="'+p+'due" class="in" data-k="due" type="date" value="'+esc(r.due)+'" aria-label="Tanggal delivery"></td>'+
+    '<td class="n"><input id="'+p+'load" class="in" data-k="load" type="number" min="0" step="1" inputmode="decimal" value="'+esc(r.load)+'" aria-label="Beban jam"></td>'+
+    '<td data-o="status"></td><td class="mono" data-o="finish"></td><td data-o="gap"></td>'+
+    '<td><button class="x" type="button" data-del aria-label="Hapus baris">&times;</button></td></tr>';
+}
+function renderTables(){
+  $('#req-body').innerHTML=S.req.map(function(r){return rowHTML('req',r);}).join('');
+  $('#wip-body').innerHTML=S.wip.map(function(r){return rowHTML('wip',r);}).join('');
+  $('#req-empty').hidden=S.req.length>0;
+  $('#wip-empty').hidden=S.wip.length>0;
+}
+function chip(cls,t){return '<span class="chip '+cls+'">'+t+'</span>';}
+function paintTable(body,items,map,kind){
+  items.forEach(function(it){
+    var tr=body.querySelector('tr[data-id="'+it.id+'"]');if(!tr)return;
+    var r=map[it.id]||{status:'idle'};
+    var st,fin='-',gap={t:'-',c:''};
+    if(r.status==='idle'){st=chip('','Lengkapi data');}
+    else{
+      if(kind==='req')st=r.status==='ok'?chip('ok','Masuk'):chip('hold','Tahan');
+      else st=r.status==='ok'?chip('ok','Aman'):chip('late','Berisiko telat');
+      fin=r.finish?fmt(r.finish):'Di luar jadwal';
+      gap=gapText(r.due,r.finish);
+    }
+    tr.querySelector('[data-o="status"]').innerHTML=st;
+    tr.querySelector('[data-o="finish"]').textContent=fin;
+    var g=tr.querySelector('[data-o="gap"]');g.textContent=gap.t;g.className=gap.c;
+  });
+}
+
+/* ---------- vonis cek cepat ---------- */
+function paintVerdict(c){
+  var q=S.quick, el=$('#verdict'), load=num(q.load);
+  if(!load||!parse(q.due)){
+    el.className='verdict';
+    el.innerHTML='<div class="v-head">'+chip('','Menunggu data')+'</div><p class="v-title">Isi delivery diminta dan beban jam untuk melihat hasilnya.</p>';
+    return;
+  }
+  var elig=(q.masuk&&q.masuk>c.today)?q.masuk:c.today;
+  var r=alloc(c.used,elig,load,S.P.lt);
+  var ok=!!r.finish&&r.finish<=q.due;
+  var free=freeUntil(c.used,elig,q.due);
+  var cls=ok?'ok':'hold', h='';
+  h+='<div class="v-head">'+chip(ok?'ok':'hold',ok?'Masuk':'Tahan');
+  if(ok)h+='<span class="v-title">Bisa dikerjakan, selesai '+fmt(r.finish)+'</span>';
+  else if(r.finish)h+='<span class="v-title">Ditahan. Paling cepat selesai '+fmt(r.finish)+'</span>';
+  else h+='<span class="v-title">Ditahan. Tidak ada slot dalam jadwal yang dihitung</span>';
+  h+='</div>';
+  var gap=gapText(q.due,r.finish);
+  h+='<dl class="v-grid">'+
+    '<div><dt>Selesai paling cepat</dt><dd>'+(r.finish?fmt(r.finish):'-')+'</dd></div>'+
+    '<div><dt>Delivery diminta</dt><dd>'+fmt(q.due)+'</dd></div>'+
+    '<div><dt>Selisih</dt><dd class="'+gap.c+'" style="font-size:14px">'+gap.t+'</dd></div></dl>';
+  if(ok){
+    h+='<p class="v-note">Butuh '+fh(load)+' jam, kapasitas tersedia '+fh(free)+' jam sampai '+fmt(q.due)+'.</p>';
+  }else{
+    var why;
+    if(q.due<elig)why='Tanggal delivery lebih awal dari tanggal mulai yang mungkin ('+fmt(elig)+').';
+    else if(!r.capFinish||r.capFinish>q.due)why='Kapasitas kurang: butuh '+fh(load)+' jam, tersedia '+fh(free)+' jam sampai '+fmt(q.due)+'.';
+    else why='Kapasitas cukup, tapi lead time minimum '+S.P.lt+' hari kerja belum terpenuhi sampai '+fmt(q.due)+'.';
+    h+='<p class="v-note">'+why+'</p>';
+    if(r.finish)h+='<p class="v-note">Supaya masuk, geser delivery ke '+fmt(r.finish)+' atau lebih, atau tahan sampai ada slot terbuka.</p>';
+  }
+  el.className='verdict '+cls;
+  el.innerHTML=h;
+}
+
+/* ---------- Gantt ---------- */
+function paintGantt(c){
+  var rows=c.wipOrder.concat(c.reqOrder), maxEnd=c.today;
+  rows.forEach(function(o){if(o.res.finish&&o.res.finish>maxEnd)maxEnd=o.res.finish;});
+  var n=Math.min(84,Math.max(21,diffDays(c.today,maxEnd)+4)), px=18;
+  var ticks='',cols='',i;
+  for(i=0;i<n;i++){
+    var d=addDays(c.today,i), dow=parse(d).getUTCDay();
+    cols+='<i class="'+(i===0?'t0':'')+(isWork(d)?'':' nw')+'"></i>';
+    if(i===0)ticks+='<span class="g-tick" style="left:0">Hari ini</span>';
+    else if(dow===1)ticks+='<span class="g-tick" style="left:'+(i*px)+'px">'+parse(d).getUTCDate()+' '+MON[parse(d).getUTCMonth()]+'</span>';
+  }
+  function row(o,kind){
+    var res=o.res,it=o.item,bar='',due='';
+    if(res.finish){
+      var s=res.start<c.today?c.today:res.start;
+      var left=diffDays(c.today,s)*px, w=(diffDays(s,res.finish)+1)*px;
+      var cls=kind==='wip'?(res.status==='late'?'late':''):(res.status==='hold'?'hold':'req');
+      if(kind==='wip'&&res.status==='late')cls='late';
+      bar='<i class="bar '+cls+'" style="left:'+left+'px;width:'+w+'px"></i>';
+    }
+    if(parse(res.due)){
+      var di=diffDays(c.today,res.due);
+      if(di>=0&&di<n)due='<i class="due" style="left:'+(di*px+px-1)+'px"></i>';
+    }
+    return '<div class="g-row"><div class="g-lab" title="'+esc(it.code)+'"><span>'+esc(it.code||'Tanpa kode')+'</span></div><div class="g-track">'+bar+due+'</div></div>';
+  }
+  var h='<div class="g" style="--n:'+n+';--px:'+px+'px">';
+  h+='<div class="g-head"><div class="g-lab"></div><div class="g-track">'+ticks+'</div></div>';
+  h+='<div class="g-body"><div class="g-cols">'+cols+'</div>';
+  if(!rows.length)h+='<div class="g-group"><div class="g-lab">Belum ada data</div><div class="g-track"></div></div>';
+  if(c.wipOrder.length){
+    h+='<div class="g-group"><div class="g-lab">WIP</div><div class="g-track"></div></div>';
+    c.wipOrder.forEach(function(o){h+=row(o,'wip');});
+  }
+  if(c.reqOrder.length){
+    h+='<div class="g-group"><div class="g-lab">Permintaan</div><div class="g-track"></div></div>';
+    c.reqOrder.forEach(function(o){h+=row(o,'req');});
+  }
+  h+='</div></div>';
+  $('#gantt').innerHTML=h;
+}
+
+/* ---------- kapasitas mingguan ---------- */
+function paintWeeks(c){
+  var mon=c.today;
+  while(parse(mon).getUTCDay()!==1)mon=addDays(mon,-1);
+  var h='';
+  for(var w=0;w<8;w++){
+    var ws=addDays(mon,7*w),cap=0,used=0;
+    for(var i=0;i<7;i++){
+      var d=addDays(ws,i);
+      if(d<c.today||!isWork(d))continue;
+      cap+=S.P.cap;used+=c.used[d]||0;
+    }
+    var dd=parse(ws),lab=dd.getUTCDate()+' '+MON[dd.getUTCMonth()];
+    if(cap<=0){
+      h+='<div class="wk-row"><span class="wk-lab">'+lab+'</span><div class="wk-track"></div><span class="wk-val">Libur</span></div>';
+      continue;
+    }
+    var pct=Math.min(100,used/cap*100), full=used>=cap-EPS;
+    h+='<div class="wk-row"><span class="wk-lab">'+lab+'</span>'+
+      '<div class="wk-track"><div class="wk-fill'+(full?' full':'')+'" style="width:'+pct+'%"></div></div>'+
+      '<span class="wk-val">'+fh(used)+' / '+fh(cap)+' jam'+(full?' · penuh':' · sisa '+fh(cap-used))+'</span></div>';
+  }
+  $('#weeks').innerHTML=h;
+}
+
+/* ---------- parameter ---------- */
+function paintHolidays(){
+  var el=$('#hol');
+  if(!S.P.holidays.length){el.innerHTML='<span class="hint">Belum ada tanggal libur. Tambahkan libur nasional dan cuti bersama.</span>';return;}
+  el.innerHTML=S.P.holidays.map(function(d){
+    return '<span class="chip">'+fmt(d)+' '+parse(d).getUTCFullYear()+' <button type="button" data-hdel="'+d+'" aria-label="Hapus libur '+fmt(d)+'">&times;</button></span>';
+  }).join('');
+}
+
+function update(){
+  var c=compute();
+  paintTable($('#req-body'),S.req,c.req,'req');
+  paintTable($('#wip-body'),S.wip,c.wip,'wip');
+  paintVerdict(c);
+  paintGantt(c);
+  paintWeeks(c);
+  $('#sample-note').hidden=!S.sample;
+}
+
+/* ---------- simpan ---------- */
+function save(){try{localStorage.setItem(KEY,JSON.stringify({P:S.P,wip:S.wip,req:S.req,sample:S.sample,quick:S.quick,seq:seq}));}catch(e){}}
+function readSaved(){
+  try{
+    var s=JSON.parse(localStorage.getItem(KEY)||'null');
+    if(s&&s.P&&Array.isArray(s.wip)&&Array.isArray(s.req)&&Array.isArray(s.P.holidays))return s;
+  }catch(e){}
+  return null;
+}
+function touched(){S.sample=false;save();update();}
+
+function makeSample(){
+  S={P:{cap:16,lt:3,sat:false,holidays:[]},wip:[],req:[],sample:true,quick:{}};
+  var t=todayISO(), w=function(n){return addWork(t,n);};
+  S.wip=[
+    {id:nid(),code:'DEV-0412 Style A',masuk:addDays(t,-10),due:w(4),load:'30'},
+    {id:nid(),code:'DEV-0415 Style B',masuk:addDays(t,-7),due:w(6),load:'36'},
+    {id:nid(),code:'DEV-0419 Style C',masuk:addDays(t,-3),due:w(8),load:'24'},
+    {id:nid(),code:'DEV-0421 Style D',masuk:addDays(t,-2),due:w(11),load:'40'}
+  ];
+  S.req=[
+    {id:nid(),code:'REQ-0501 Style E',masuk:t,due:w(10),load:'24'},
+    {id:nid(),code:'REQ-0502 Style F',masuk:t,due:w(5),load:'16'},
+    {id:nid(),code:'REQ-0503 Style G',masuk:t,due:w(7),load:'12'},
+    {id:nid(),code:'REQ-0504 Style H',masuk:t,due:w(16),load:'24'}
+  ];
+  S.quick={code:'',masuk:t,due:w(8),load:'20'};
+}
+function init(){
+  var s=readSaved();
+  if(s){S=s;seq=Math.max(s.seq||1,1);
+    S.P.cap=+S.P.cap||0;S.P.lt=+S.P.lt||1;S.P.sat=!!S.P.sat;
+    S.quick=S.quick||{};
+    S.wip.concat(S.req).forEach(function(r){if(r.id>=seq)seq=r.id+1;});
+  }else makeSample();
+}
+function syncFields(){
+  $('#p-cap').value=S.P.cap;$('#p-lt').value=S.P.lt;$('#p-sat').value=S.P.sat?'1':'0';
+  $('#q-code').value=S.quick.code||'';$('#q-masuk').value=S.quick.masuk||'';
+  $('#q-due').value=S.quick.due||'';$('#q-load').value=S.quick.load||'';
+}
+
+/* ---------- event ---------- */
+function bindBody(sel,key){
+  var body=$(sel);
+  body.addEventListener('input',function(e){
+    var t=e.target,tr=t.closest('tr');if(!tr||!t.dataset.k)return;
+    var id=+tr.dataset.id,item=S[key].filter(function(x){return x.id===id;})[0];if(!item)return;
+    item[t.dataset.k]=t.value;touched();
+  });
+  body.addEventListener('click',function(e){
+    var b=e.target.closest('[data-del]');if(!b)return;
+    var id=+b.closest('tr').dataset.id;
+    S[key]=S[key].filter(function(x){return x.id!==id;});
+    renderTables();touched();
+  });
+}
+function bindAll(){
+  bindBody('#req-body','req');bindBody('#wip-body','wip');
+  ['code','masuk','due','load'].forEach(function(k){
+    $('#q-'+k).addEventListener('input',function(e){S.quick[k]=e.target.value;save();update();});
+  });
+  $('#q-add').addEventListener('click',function(){
+    var q=S.quick,t=todayISO();
+    S.req.push({id:nid(),code:q.code||('REQ-'+(S.req.length+1)),masuk:q.masuk||t,due:q.due||'',load:q.load||''});
+    S.quick.code='';$('#q-code').value='';
+    renderTables();touched();
+    var m=$('#q-msg');m.textContent='Sudah masuk antrian. Statusnya ada di tabel.';
+    setTimeout(function(){m.textContent='';},4000);
+  });
+  $('#add-req').addEventListener('click',function(){
+    S.req.push({id:nid(),code:'REQ-'+(S.req.length+1),masuk:todayISO(),due:'',load:''});
+    renderTables();touched();
+  });
+  $('#add-wip').addEventListener('click',function(){
+    S.wip.push({id:nid(),code:'DEV-'+(S.wip.length+1),masuk:todayISO(),due:'',load:''});
+    renderTables();touched();
+  });
+  $('#p-cap').addEventListener('input',function(e){S.P.cap=Math.max(0,parseFloat(e.target.value)||0);touched();});
+  $('#p-lt').addEventListener('input',function(e){S.P.lt=Math.max(1,parseInt(e.target.value,10)||1);touched();});
+  $('#p-sat').addEventListener('change',function(e){S.P.sat=e.target.value==='1';touched();});
+  $('#hol-add').addEventListener('click',function(){
+    var v=$('#hol-in').value;
+    if(parse(v)&&S.P.holidays.indexOf(v)<0){S.P.holidays.push(v);S.P.holidays.sort();paintHolidays();touched();}
+    $('#hol-in').value='';
+  });
+  $('#hol').addEventListener('click',function(e){
+    var b=e.target.closest('[data-hdel]');if(!b)return;
+    S.P.holidays=S.P.holidays.filter(function(d){return d!==b.dataset.hdel;});
+    paintHolidays();touched();
+  });
+  $('#reset-sample').addEventListener('click',function(){
+    seq=1;makeSample();syncFields();renderTables();paintHolidays();save();update();
+  });
+  $('#clear-all').addEventListener('click',function(){
+    S.wip=[];S.req=[];S.sample=false;renderTables();save();update();
+  });
+}
+
+init();syncFields();renderTables();paintHolidays();bindAll();update();
+})();
+</script>
+
+</body></html>
